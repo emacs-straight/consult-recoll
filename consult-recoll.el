@@ -4,7 +4,7 @@
 ;; Maintainer: Jose A Ortega Ruiz <jao@gnu.org>
 ;; Keywords: docs, convenience
 ;; License: GPL-3.0-or-later
-;; Version: 0.6.2
+;; Version: 0.7
 ;; Package-Requires: ((emacs "26.1") (consult "0.18"))
 ;; Homepage: https://codeberg.org/jao/consult-recoll
 
@@ -142,10 +142,9 @@ Set to nil to use the default 'title (path)' format."
                 (and (derived-mode-p 'org-mode)
                      (let ((txt (replace-regexp-in-string "\\]\\].+" "" txt)))
                        (search-forward txt nil t)))
-                (and (string= mime "text/html")
-                     (let ((mid (/ (length txt) 2)))
-                       (or (search-forward (substring txt 0 mid) nil t)
-                           (search-forward (substring txt mid) nil t)))))
+                (let ((mid (/ (length txt) 2)))
+                  (or (search-forward (substring txt 0 mid) nil t)
+                      (search-forward (substring txt mid) nil t))))
         (goto-char (match-beginning 0))
         (when (derived-mode-p 'org-mode) (org-reveal))))))
 
@@ -162,7 +161,8 @@ Set to nil to use the default 'title (path)' format."
       (if (not consult-recoll-inline-snippets)
           (funcall open url)
         (funcall open url (consult-recoll--candidate-page candidate))
-        (when (string-prefix-p "text/" mime)
+        (when (or (string-prefix-p "text/" mime)
+                  (string-prefix-p "message/" mime))
           (consult-recoll--search-snippet candidate mime))))))
 
 (defconst consult-recoll--line-rx
@@ -234,6 +234,15 @@ Set to nil to use the default 'title (path)' format."
   "If TRANSFORM return candidate, othewise extract mime-type."
   (if transform candidate (consult-recoll--candidate-mime candidate)))
 
+(defun consult-recoll--annotation (candidate)
+  "Annotation for the given CANDIDATE (its size by default)"
+  (let* ((head (not (consult-recoll--candidate-page candidate)))
+         (size (consult-recoll--candidate-size candidate))
+         (mime (if head
+                   ""
+                 (format ", %s" (consult-recoll--candidate-mime candidate)))))
+    (format "     (%s bytes%s)" size mime)))
+
 (defun consult-recoll--search (&optional initial)
   "Perform an asynchronous recoll search via `consult--read'.
 If given, use INITIAL as the starting point of the query."
@@ -241,6 +250,7 @@ If given, use INITIAL as the starting point of the query."
                      #'consult-recoll--command
                    (consult--async-filter #'identity)
                    (consult--async-map #'consult-recoll--transformer))
+                 :annotate #'consult-recoll--annotation
                  :prompt consult-recoll-prompt
                  :require-match t
                  :lookup #'consult--lookup-member
